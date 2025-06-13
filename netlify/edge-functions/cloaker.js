@@ -445,7 +445,7 @@ const generateWhiteQuiz = (reason, details = {}) => {
 </html>`;
 };
 
-// === PÁGINA INTERMEDIÁRIA COM UTMIFY OTIMIZADA ===
+// === PÁGINA INTERMEDIÁRIA COM UTMIFY ===
 const generateTrackingPage = (targetUrl) => {
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -453,6 +453,25 @@ const generateTrackingPage = (targetUrl) => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Carregando...</title>
+    
+    <!-- SCRIPT UTMs UTMIFY (PRIMEIRO) -->
+    <script
+      src="https://cdn.utmify.com.br/scripts/utms/latest.js"
+      data-utmify-prevent-xcod-sck
+      data-utmify-prevent-subids
+      async
+      defer
+    ></script>
+    
+    <!-- PIXEL UTMIFY (SEGUNDO - contém Facebook) -->
+    <script>
+      window.pixelId = "682ec51f2cd50fbe5ef79f66";
+      var a = document.createElement("script");
+      a.setAttribute("async", "");
+      a.setAttribute("defer", "");
+      a.setAttribute("src", "https://cdn.utmify.com.br/scripts/pixel/pixel.js");
+      document.head.appendChild(a);
+    </script>
     
     <style>
         body {
@@ -475,62 +494,23 @@ const generateTrackingPage = (targetUrl) => {
         }
         .progress-fill {
             height: 100%; background: linear-gradient(90deg, #4CAF50, #45a049); width: 0%;
-            border-radius: 2px; animation: progress 6s ease-out forwards;
+            border-radius: 2px; animation: progress 3s ease-out forwards;
         }
         @keyframes progress { 0% { width: 0%; } 100% { width: 100%; } }
-        .debug-info {
-            margin-top: 20px; padding: 10px; background: #f0f8ff; border-radius: 8px;
-            font-size: 12px; color: #666; text-align: left; max-height: 120px; overflow-y: auto;
-        }
     </style>
 </head>
 <body>
     <div class="loader-container">
         <div class="spinner"></div>
-        <div class="loading-text" id="loadingText">Carregando protocolo...</div>
+        <div class="loading-text">Carregando protocolo...</div>
         <div class="progress-bar">
             <div class="progress-fill"></div>
         </div>
-        <div class="sub-text" id="subText">Inicializando tracking...</div>
-        <div class="debug-info" id="debugInfo" style="display: none;"></div>
+        <div class="sub-text">Preparando sua experiência personalizada</div>
     </div>
 
     <script>
-        // === CONFIGURAÇÃO DE DEBUG ===
-        const DEBUG_MODE = true; // Mudar para false em produção
-        let debugLogs = [];
-        
-        function log(message) {
-            const timestamp = new Date().toLocaleTimeString();
-            const logMessage = \`[\${timestamp}] \${message}\`;
-            debugLogs.push(logMessage);
-            console.log('🎯 UTMify:', logMessage);
-            
-            if (DEBUG_MODE) {
-                const debugDiv = document.getElementById('debugInfo');
-                debugDiv.style.display = 'block';
-                debugDiv.innerHTML = debugLogs.join('<br>');
-                debugDiv.scrollTop = debugDiv.scrollHeight;
-            }
-        }
-        
-        // === VARIÁVEIS DE CONTROLE ===
-        let utmScriptLoaded = false;
-        let pixelScriptLoaded = false;
-        let utmifyInitialized = false;
-        let trackingComplete = false;
-        let redirectTimer = null;
-        
-        // === ATUALIZAR UI ===
-        function updateLoadingText(text) {
-            document.getElementById('loadingText').textContent = text;
-        }
-        
-        function updateSubText(text) {
-            document.getElementById('subText').textContent = text;
-        }
-        
-        // === FUNÇÃO PARA PRESERVAR UTMs NO REDIRECT ===
+        // FUNÇÃO PARA PRESERVAR UTMs NO REDIRECT
         function preserveUTMsAndRedirect(targetUrl) {
             const currentParams = new URLSearchParams(window.location.search);
             const targetURL = new URL(targetUrl);
@@ -543,152 +523,37 @@ const generateTrackingPage = (targetUrl) => {
                 }
             }
             
-            log(\`Redirecting to: \${targetURL.toString()}\`);
-            updateLoadingText('Redirecionando...');
-            updateSubText('Finalizando...');
+            console.log('🎯 Redirecting to:', targetURL.toString());
+            window.location.href = targetURL.toString();
+        }
+        
+        // AGUARDAR EXECUÇÃO DOS SCRIPTS UTMIFY + REDIRECT
+        let scriptsLoaded = 0;
+        const totalScripts = 2; // UTMs + Pixel
+        
+        function checkScriptsAndRedirect() {
+            // Verificar se scripts UTMify carregaram
+            if (window.utmify || document.querySelector('script[src*="utmify"]')) {
+                scriptsLoaded++;
+            }
             
-            // Pequeno delay para garantir que logs sejam vistos
+            // Aguardar mínimo 3 segundos para execução completa
             setTimeout(() => {
-                window.location.href = targetURL.toString();
-            }, 500);
-        }
-        
-        // === VERIFICAR STATUS E EXECUTAR REDIRECT ===
-        function checkAndRedirect() {
-            if (trackingComplete) {
-                log('Tracking já completo, redirecionando...');
                 preserveUTMsAndRedirect('${targetUrl}');
-                return;
-            }
-            
-            const utmifyExists = window.utmify !== undefined;
-            const pixelExists = document.querySelector('script[src*="pixel.js"]') !== null;
-            
-            log(\`Status check - UTMify exists: \${utmifyExists}, Pixel exists: \${pixelExists}\`);
-            
-            if (utmifyExists && utmScriptLoaded && pixelScriptLoaded) {
-                log('Todos os scripts carregados, aguardando execução...');
-                updateLoadingText('Processando dados...');
-                updateSubText('Aguarde mais alguns segundos...');
-                
-                // Aguardar mais tempo para garantir execução completa
-                setTimeout(() => {
-                    trackingComplete = true;
-                    log('Tracking completo, executando redirect');
-                    preserveUTMsAndRedirect('${targetUrl}');
-                }, 2000);
-            }
+            }, 3000);
         }
         
-        // === CARREGAR SCRIPT UTMs UTMIFY (SÍNCRONO) ===
-        function loadUTMScript() {
-            log('Carregando script UTMs...');
-            updateSubText('Carregando UTMs...');
-            
-            const utmScript = document.createElement('script');
-            utmScript.src = 'https://cdn.utmify.com.br/scripts/utms/latest.js';
-            utmScript.setAttribute('data-utmify-prevent-xcod-sck', '');
-            utmScript.setAttribute('data-utmify-prevent-subids', '');
-            
-            utmScript.onload = function() {
-                utmScriptLoaded = true;
-                log('Script UTMs carregado com sucesso');
-                updateSubText('UTMs carregados, carregando pixel...');
-                
-                // Aguardar um pouco para UTMs processarem
-                setTimeout(() => {
-                    loadPixelScript();
-                }, 1000);
-            };
-            
-            utmScript.onerror = function() {
-                log('ERRO ao carregar script UTMs');
-                updateSubText('Erro no carregamento, tentando continuar...');
-                setTimeout(() => loadPixelScript(), 2000);
-            };
-            
-            document.head.appendChild(utmScript);
-        }
-        
-        // === CARREGAR PIXEL UTMIFY (SÍNCRONO) ===
-        function loadPixelScript() {
-            log('Carregando pixel UTMify...');
-            updateSubText('Carregando pixel de tracking...');
-            
-            // Definir pixelId ANTES de carregar o script
-            window.pixelId = "682ec51f2cd50fbe5ef79f66";
-            
-            const pixelScript = document.createElement('script');
-            pixelScript.src = 'https://cdn.utmify.com.br/scripts/pixel/pixel.js';
-            
-            pixelScript.onload = function() {
-                pixelScriptLoaded = true;
-                log('Pixel script carregado com sucesso');
-                updateSubText('Finalizando configuração...');
-                
-                // Aguardar execução do pixel
-                setTimeout(() => {
-                    checkAndRedirect();
-                }, 1500);
-            };
-            
-            pixelScript.onerror = function() {
-                log('ERRO ao carregar pixel script');
-                updateSubText('Erro no pixel, continuando...');
-                pixelScriptLoaded = true; // Marcar como carregado para continuar
-                setTimeout(() => checkAndRedirect(), 2000);
-            };
-            
-            document.head.appendChild(pixelScript);
-        }
-        
-        // === FALLBACK DE SEGURANÇA ===
-        function setupFallback() {
-            // Fallback após 8 segundos TOTAL (independente do status)
-            redirectTimer = setTimeout(() => {
-                if (!trackingComplete) {
-                    log('FALLBACK: Tempo limite atingido, redirecionando...');
-                    updateLoadingText('Finalizando...');
-                    updateSubText('Redirecionando em instantes...');
-                    trackingComplete = true;
-                    preserveUTMsAndRedirect('${targetUrl}');
-                }
-            }, 8000);
-        }
-        
-        // === INICIALIZAÇÃO ===
-        function init() {
-            log('Iniciando processo de tracking...');
-            updateLoadingText('Configurando tracking...');
-            
-            // Configurar eventos de visibilidade para pausar se tab não estiver ativa
-            document.addEventListener('visibilitychange', function() {
-                if (document.hidden) {
-                    log('Tab ficou oculta, pausando timers...');
-                } else {
-                    log('Tab voltou a ficar visível, resumindo...');
-                }
-            });
-            
-            // Iniciar carregamento sequencial
-            setupFallback();
-            loadUTMScript();
-        }
-        
-        // === EXECUTAR QUANDO DOM ESTIVER PRONTO ===
+        // Iniciar verificação após DOM pronto
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', init);
+            document.addEventListener('DOMContentLoaded', checkScriptsAndRedirect);
         } else {
-            init();
+            checkScriptsAndRedirect();
         }
         
-        // === MONITORAMENTO CONTÍNUO ===
-        setInterval(() => {
-            if (!trackingComplete) {
-                const utmifyStatus = window.utmify ? 'OK' : 'NOT_READY';
-                log(\`Monitor: UTMify=\${utmifyStatus}, UTM=\${utmScriptLoaded}, Pixel=\${pixelScriptLoaded}\`);
-            }
-        }, 2000);
+        // Fallback: redirect após 5 segundos independente do status
+        setTimeout(() => {
+            preserveUTMsAndRedirect('${targetUrl}');
+        }, 5000);
     </script>
 </body>
 </html>`;
